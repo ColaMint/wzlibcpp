@@ -628,7 +628,7 @@ wz::Node *wz::Node::find_from_path(const std::u16string &path)
             // rewind(file);
 
             // // 分配内存以存储文件内容
-            // unsigned char *buffer = (unsigned char *)malloc(file_size); // +1 为字符串结尾的'\0'
+            // unsigned char *buffer = (unsigned char *)malloc(file_size);
             // if (buffer == NULL)
             // {
             //     perror("Memory allocation failed");
@@ -683,8 +683,14 @@ wz::Node *wz::Node::find_from_path(const std::u16string &path)
 
             std::string data((const char *)file_data, file_size - 1);
 
+            std::replace(data.begin(), data.end(), '\r', '\n');
+
             for (const auto &s : std::views::split(data, u'\n') | std::views::common)
             {
+                if (s.size() == 0)
+                {
+                    continue;
+                }
                 auto file_name = std::u16string{s.begin(), s.end()};
                 auto *prop = new wz::Property<wzstring>(Type::String, this->img);
                 prop->set(file_name);
