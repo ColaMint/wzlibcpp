@@ -4,6 +4,11 @@
 #include "Reader.hpp"
 #include "Keys.hpp"
 
+wz::Reader::Reader(wz::MutableKey &new_key, unsigned char *buffer, unsigned int size)
+    : cursor(0), key(new_key), buffer(buffer), buffer_size(size)
+{
+}
+
 wz::Reader::Reader(wz::MutableKey &new_key, const char *file_path)
     : cursor(0), key(new_key)
 {
@@ -13,7 +18,14 @@ wz::Reader::Reader(wz::MutableKey &new_key, const char *file_path)
 
 u8 wz::Reader::read_byte()
 {
-    return mmap[cursor++];
+    if (buffer_size == 0)
+    {
+        return mmap[cursor++];
+    }
+    else
+    {
+        return buffer[cursor++];
+    }
 }
 
 [[maybe_unused]] std::vector<u8> wz::Reader::read_bytes(const size_t &len)

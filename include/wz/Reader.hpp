@@ -6,18 +6,27 @@
 
 namespace wz
 {
-
     using wzstring = std::u16string;
 
     class Reader final
     {
     public:
+        explicit Reader(wz::MutableKey &new_key, unsigned char *buffer, unsigned int size);
+
         explicit Reader(wz::MutableKey &new_key, const char *file_path);
 
         template <typename T>
         [[nodiscard]] T read()
         {
-            T result = *reinterpret_cast<T *>(&mmap[cursor]);
+            T result;
+            if (buffer_size == 0)
+            {
+                result = *reinterpret_cast<T *>(&mmap[cursor]);
+            }
+            else
+            {
+                result = *reinterpret_cast<T *>(&buffer[cursor]);
+            }
             cursor += sizeof(decltype(result));
             return result;
         }
@@ -70,6 +79,9 @@ namespace wz
         MutableKey &key;
 
         size_t cursor = 0;
+
+        unsigned char *buffer = nullptr;
+        unsigned int buffer_size = 0;
 
         mio::mmap_source mmap;
 

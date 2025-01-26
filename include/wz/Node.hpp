@@ -13,6 +13,7 @@ namespace wz
 
     class Node;
     class File;
+    class Img;
 
     typedef std::vector<Node *> WzList;
     typedef std::unordered_map<wzstring, WzList> WzMap;
@@ -21,7 +22,9 @@ namespace wz
     {
     public:
         explicit Node();
+        explicit Node(const wzstring &name);
         explicit Node(const Type &new_type, File *root_file);
+        explicit Node(const Type &new_type, Img *img, const wzstring &name = u"");
 
         virtual ~Node();
 
@@ -54,16 +57,21 @@ namespace wz
     public:
         Type type;
 
-        Node *parent;
+        Node *parent = nullptr;
         WzMap children;
 
-        File *file;
+        File *file = nullptr;
+        Img *img = nullptr;
         Reader *reader = nullptr;
 
         std::u16string path = u"";
 
         bool parse_property_list(Node *target, size_t offset);
         void parse_extended_prop(const wzstring &name, Node *target, const size_t &offset);
+
+        bool parse_property_list2(Node *target, size_t offset);
+        void parse_extended_prop2(const wzstring &name, Node *target, const size_t &offset);
+
         WzCanvas parse_canvas_property();
         WzSound parse_sound_property();
 

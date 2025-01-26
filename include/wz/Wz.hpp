@@ -2,6 +2,11 @@
 
 #include "Types.hpp"
 
+#define U8 static_cast<u8>
+#define IV4(A, B, C, D) \
+    {                   \
+        U8(A), U8(B), U8(C), U8(D)}
+
 //////////////////////////////////////////////////////////////////////////
 
 namespace wz {
