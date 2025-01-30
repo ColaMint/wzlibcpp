@@ -3,6 +3,9 @@
 #include <mio/mmap.hpp>
 #include "NumTypes.hpp"
 #include "Keys.hpp"
+#ifdef __EMSCRIPTEN__
+#include "Emscripten.hpp"
+#endif
 
 namespace wz
 {
@@ -11,25 +14,27 @@ namespace wz
     class Reader final
     {
     public:
-        explicit Reader(wz::MutableKey &new_key, unsigned char *buffer, unsigned int size);
-
         explicit Reader(wz::MutableKey &new_key, const char *file_path);
+
+#ifdef __EMSCRIPTEN__
+        explicit Reader(wz::MutableKey &new_key, unsigned char *data, size_t size);
 
         template <typename T>
         [[nodiscard]] T read()
         {
-            T result;
-            if (buffer_size == 0)
-            {
-                result = *reinterpret_cast<T *>(&mmap[cursor]);
-            }
-            else
-            {
-                result = *reinterpret_cast<T *>(&buffer[cursor]);
-            }
+            T result = *reinterpret_cast<T *>(&buffer_data[cursor]);
             cursor += sizeof(decltype(result));
             return result;
         }
+#else
+        template <typename T>
+        [[nodiscard]] T read()
+        {
+            T result = *reinterpret_cast<T *>(&mmap[cursor]);
+            cursor += sizeof(decltype(result));
+            return result;
+        }
+#endif
 
         void skip(const size_t &size);
 
@@ -75,13 +80,15 @@ namespace wz
 
         void set_key(MutableKey &new_key);
 
-    private:
+#ifdef __EMSCRIPTEN__
+        std::string url;
+        unsigned char *buffer_data;
+        size_t buffer_size;
+#endif
+    public:
         MutableKey &key;
 
         size_t cursor = 0;
-
-        unsigned char *buffer = nullptr;
-        unsigned int buffer_size = 0;
 
         mio::mmap_source mmap;
 

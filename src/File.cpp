@@ -2,29 +2,52 @@
 #include "File.hpp"
 #include "Wz.hpp"
 #include "Directory.hpp"
+#ifdef __EMSCRIPTEN__
+#include "Emscripten.hpp"
+#include <ranges>
 
-[[maybe_unused]] wz::File::File(const std::initializer_list<u8> &new_iv, const char *path)
-    : reader(Reader(key, path)), root(new Node(Type::NotSet, this)), key(), iv(nullptr)
+bool wz::File::parse(const wzstring &name)
 {
-    iv = new u8[4];
-    memcpy(iv, new_iv.begin(), 4);
-    init_key();
-    reader.set_key(key);
+    reader.url = std::string{name.begin(), name.end()};
+    parse_directories(root);
+    return true;
 }
 
-[[maybe_unused]] wz::File::File(u8 *new_iv, const char *path)
-    : reader(Reader(key, path)), root(new Node(Type::NotSet, this)), key(), iv(new_iv)
+bool wz::File::parse_directories(wz::Node *node)
 {
-    init_key();
-    reader.set_key(key);
-}
+    auto path = reader.url;
+    auto url = "Img/" + reader.url + "/Directory.txt";
 
-wz::File::~File()
-{
-    delete[] iv;
-    delete root;
-}
+    Emscripten::load_file(url);
 
+    std::string data((const char *)Emscripten::file_data, Emscripten::file_size);
+    std::replace(data.begin(), data.end(), '\r', '\n');
+
+    for (const auto &s : std::views::split(data, u'\n') | std::views::common)
+    {
+        if (s.size() == 0)
+        {
+            continue;
+        }
+        auto file_name = std::u16string{s.begin(), s.end()};
+        Directory *dir = nullptr;
+        if (file_name.find(u".img") != std::string::npos)
+        {
+            dir = new Directory(this, true, 0, 0, 0);
+        }
+        else
+        {
+            dir = new Directory(this, false, 0, 0, 0);
+            // 如果是Directory,则继续解析
+            reader.url = path + "/" + std::string{file_name.begin(), file_name.end()};
+            parse_directories(dir);
+        }
+        node->path = std::u16string{reader.url.begin(), reader.url.end()};
+        node->appendChild({file_name.begin(), file_name.end()}, dir);
+    }
+    return true;
+}
+#else
 bool wz::File::parse(const wzstring &name)
 {
     auto magic = reader.read_string(4);
@@ -161,6 +184,28 @@ bool wz::File::parse_directories(wz::Node *node)
     }
 
     return true;
+}
+#endif
+[[maybe_unused]] wz::File::File(const std::initializer_list<u8> &new_iv, const char *path)
+    : reader(Reader(key, path)), root(new Node(Type::NotSet, this)), key(), iv(nullptr)
+{
+    iv = new u8[4];
+    memcpy(iv, new_iv.begin(), 4);
+    init_key();
+    reader.set_key(key);
+}
+
+[[maybe_unused]] wz::File::File(u8 *new_iv, const char *path)
+    : reader(Reader(key, path)), root(new Node(Type::NotSet, this)), key(), iv(new_iv)
+{
+    init_key();
+    reader.set_key(key);
+}
+
+wz::File::~File()
+{
+    delete[] iv;
+    delete root;
 }
 
 u32 wz::File::get_wz_offset()

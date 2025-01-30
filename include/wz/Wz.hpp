@@ -9,8 +9,10 @@
 
 //////////////////////////////////////////////////////////////////////////
 
-namespace wz {
-    enum class Type : u8 {
+namespace wz
+{
+    enum class Type : u8
+    {
         NotSet = 0x00,
         Directory = 0x10,
         Image = 0x20,
@@ -31,32 +33,33 @@ namespace wz {
         UOL = 0x3C,
     };
 
-    constexpr u8 bit(const Type& type) {
+    constexpr u8 bit(const Type &type)
+    {
         return static_cast<u8>(type);
     }
 
-    namespace keys {
+    namespace keys
+    {
         [[maybe_unused]]
         const unsigned char gms[4] = {
-            0x4D, 0x23, 0xC7, 0x2B
-        };
+            0x4D, 0x23, 0xC7, 0x2B};
 
         [[maybe_unused]]
         const unsigned char kms[4] = {
-            0xB9, 0x7D, 0x63, 0xE9
-        };
+            0xB9, 0x7D, 0x63, 0xE9};
     }
 }
 
 //////////////////////////////////////////////////////////////////////////
 
-
 [[deprecated]]
-void WzGenKeys(const unsigned char* IV);
+void WzGenKeys(const unsigned char *IV);
 
-namespace wz {
+namespace wz
+{
 
-    struct Description {
+    struct Description
+    {
         u32 start;
         u32 hash;
         i16 version;
@@ -65,6 +68,6 @@ namespace wz {
     u32 get_version_hash(i32 encryptedVersion, i32 realVersion);
 
     [[deprecated]]
-    void initAES(const u8* iv);
+    void initAES(const u8 *iv);
 
 }

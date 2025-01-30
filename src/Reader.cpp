@@ -4,11 +4,24 @@
 #include "Reader.hpp"
 #include "Keys.hpp"
 
-wz::Reader::Reader(wz::MutableKey &new_key, unsigned char *buffer, unsigned int size)
-    : cursor(0), key(new_key), buffer(buffer), buffer_size(size)
+#ifdef __EMSCRIPTEN__
+#include "Emscripten.hpp"
+
+wz::Reader::Reader(wz::MutableKey &new_key, const char *file_path)
+    : cursor(0), key(new_key), url(file_path)
 {
 }
 
+wz::Reader::Reader(wz::MutableKey &new_key, unsigned char *data, size_t size)
+    : cursor(0), key(new_key), buffer_data(data), buffer_size(size)
+{
+}
+
+mio::mmap_source::size_type wz::Reader::size() const
+{
+    return 0;
+}
+#else
 wz::Reader::Reader(wz::MutableKey &new_key, const char *file_path)
     : cursor(0), key(new_key)
 {
@@ -16,16 +29,15 @@ wz::Reader::Reader(wz::MutableKey &new_key, const char *file_path)
     mmap = mio::make_mmap_source<decltype(file_path)>(file_path, error_code);
 }
 
+mio::mmap_source::size_type wz::Reader::size() const
+{
+    return mmap.size();
+}
+#endif
+
 u8 wz::Reader::read_byte()
 {
-    if (buffer_size == 0)
-    {
-        return mmap[cursor++];
-    }
-    else
-    {
-        return buffer[cursor++];
-    }
+    return read<u8>();
 }
 
 [[maybe_unused]] std::vector<u8> wz::Reader::read_bytes(const size_t &len)
@@ -159,11 +171,6 @@ wz::wzstring wz::Reader::read_wz_string()
     }
 
     return result;
-}
-
-mio::mmap_source::size_type wz::Reader::size() const
-{
-    return mmap.size();
 }
 
 bool wz::Reader::is_wz_image()
