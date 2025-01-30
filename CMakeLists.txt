@@ -18,12 +18,12 @@ add_library(wzlib ${SOURCE_FILES} ${AES_SOURCE_FILES})
 target_link_libraries(wzlib zlibstatic)
 
 if(WIN32)
-project(wzlibtest)
+        project(wzlibtest)
 
-add_executable(wzlibtest main/main.cpp ${SOURCE_FILES})
-target_link_libraries(
-        wzlibtest
-        PRIVATE
-        wzlib
-)
+        add_executable(wzlibtest main/main.cpp ${SOURCE_FILES})
+        target_link_libraries(
+                wzlibtest
+                PRIVATE
+                wzlib
+        )
 endif()
