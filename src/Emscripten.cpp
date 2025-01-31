@@ -20,20 +20,20 @@ void wz::Emscripten::fetch_file_failure(emscripten_fetch_t *fetch)
 void wz::Emscripten::load_file(std::string &url)
 {
     std::cout << "load:" << url << std::endl;
-    emscripten_fetch_attr_t fetchAttr;
-    emscripten_fetch_attr_init(&fetchAttr);
+    emscripten_fetch_attr_t attr;
+    emscripten_fetch_attr_init(&attr);
 
     // 设置请求方法为 "GET"（注意：直接赋值字符串）
-    strcpy(fetchAttr.requestMethod, "GET");
+    strcpy(attr.requestMethod, "GET");
 
     // 设置成功和失败的回调函数
-    fetchAttr.onsuccess = fetch_file_success;
-    fetchAttr.onerror = fetch_file_failure;
+    attr.onsuccess = fetch_file_success;
+    attr.onerror = fetch_file_failure;
 
-    fetchAttr.attributes = EMSCRIPTEN_FETCH_PERSIST_FILE | EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+    attr.attributes = EMSCRIPTEN_FETCH_PERSIST_FILE | EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
 
     // 启动文件下载
-    emscripten_fetch_t *fetch = emscripten_fetch(&fetchAttr, url.c_str());
+    emscripten_fetch_t *fetch = emscripten_fetch(&attr, url.c_str());
     // if (fetch->status == 200)
     // {
     //     printf("emscripten_fetch_t Success\n");
