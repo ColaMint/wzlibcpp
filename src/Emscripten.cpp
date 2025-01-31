@@ -30,10 +30,21 @@ void wz::Emscripten::load_file(std::string &url)
     fetchAttr.onsuccess = fetch_file_success;
     fetchAttr.onerror = fetch_file_failure;
 
-    fetchAttr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+    fetchAttr.attributes = EMSCRIPTEN_FETCH_PERSIST_FILE | EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
 
     // 启动文件下载
-    emscripten_fetch(&fetchAttr, url.c_str());
+    emscripten_fetch_t *fetch = emscripten_fetch(&fetchAttr, url.c_str());
+    // if (fetch->status == 200)
+    // {
+    //     printf("emscripten_fetch_t Success\n");
+    //     // printf("Data: %.*s\n", (int)fetch->numBytes, fetch->data);
+    // }
+    // else
+    // {
+    //     printf("emscripten_fetch_t Error\n");
+    //     std::cout << "emscripten_fetch_t Error" << std::endl;
+    // }
+
     // 模拟同步：等待请求完成
     while (!fetch_done)
     {
