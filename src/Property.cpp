@@ -3,27 +3,36 @@
 #include "Types.hpp"
 
 
-// get ARGB4444 piexl,ARGB8888 piexl and others.....
+// get Canvas node raw data (原始压缩数据，不解密不解压)
 template <>
 std::vector<u8> wz::Property<wz::WzCanvas>::get_raw_data()
 {
     WzCanvas canvas = get();
+    reader->set_position(canvas.offset);
+    return reader->read_bytes(canvas.size);
+}
 
-    std::vector<u8> data_stream;
+// get Canvas node parsed data (解密并解压后的像素数据)
+template <>
+std::vector<u8> wz::Property<wz::WzCanvas>::get_parsed_data()
+{
+    WzCanvas canvas = get();
+
+    std::vector<u8> compressed_data;
     reader->set_position(canvas.offset);
     size_t end_offset = reader->get_position() + canvas.size;
     unsigned long uncompressed_len = canvas.uncompressed_size;
     u8 *uncompressed = new u8[uncompressed_len];
+
     if (!canvas.is_encrypted)
     {
-        for (size_t i = 0; i < canvas.size; ++i)
-        {
-            data_stream.push_back(reader->read_byte());
-        }
-        uncompress(uncompressed, (unsigned long *)&uncompressed_len, data_stream.data(), data_stream.size());
+        // 未加密：直接读取压缩数据
+        compressed_data = reader->read_bytes(canvas.size);
+        uncompress(uncompressed, (unsigned long *)&uncompressed_len, compressed_data.data(), compressed_data.size());
     }
     else
     {
+        // 已加密：边读取边解密
         auto wz_key = get_key();
 
         while (reader->get_position() < end_offset)
@@ -32,11 +41,11 @@ std::vector<u8> wz::Property<wz::WzCanvas>::get_raw_data()
             for (size_t i = 0; i < block_size; ++i)
             {
                 auto n = wz_key[i];
-                data_stream.push_back(
+                compressed_data.push_back(
                     static_cast<u8>(reader->read_byte() ^ n));
             }
         }
-        uncompress(uncompressed, (unsigned long *)&uncompressed_len, data_stream.data(), data_stream.size());
+        uncompress(uncompressed, (unsigned long *)&uncompressed_len, compressed_data.data(), compressed_data.size());
     }
 
     std::vector<u8> pixel_stream(uncompressed, uncompressed + uncompressed_len);
@@ -44,21 +53,23 @@ std::vector<u8> wz::Property<wz::WzCanvas>::get_raw_data()
     return pixel_stream;
 }
 
-// get Sound node raw data
+// get Sound node raw data (原始二进制数据，不做任何处理)
 template <>
 std::vector<u8> wz::Property<wz::WzSound>::get_raw_data()
 {
     WzSound sound = get();
-    std::vector<u8> data_stream;
-
-    // 读取原始音频数据
     reader->set_position(sound.offset);
-    size_t end_offset = reader->get_position() + sound.size;
+    return reader->read_bytes(sound.size);
+}
 
-    while (reader->get_position() < end_offset)
-    {
-        data_stream.push_back(static_cast<u8>(reader->read_byte()));
-    }
+// get Sound node parsed data (可播放的音频数据: PCM 添加 WAV header，MP3 直接返回)
+template <>
+std::vector<u8> wz::Property<wz::WzSound>::get_parsed_data()
+{
+    WzSound sound = get();
+
+    // 获取原始音频数据
+    std::vector<u8> data_stream = get_raw_data();
 
     // 根据音频格式处理
     if (sound.format_tag == 1) {  // PCM 格式，需要添加 WAV header

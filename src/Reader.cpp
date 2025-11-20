@@ -1,6 +1,7 @@
 #include <cassert>
 #include <vector>
 #include <codecvt>
+#include <cstring>
 #include "Reader.hpp"
 #include "Keys.hpp"
 
@@ -44,11 +45,15 @@ u8 wz::Reader::read_byte()
 {
     std::vector<u8> result(len);
 
-    for (size_t i = 0; i < len; ++i)
-    {
-        result.emplace_back(read_byte());
-        cursor++;
-    }
+#ifdef __EMSCRIPTEN__
+    // Emscripten 环境：从 buffer_data 批量复制
+    std::memcpy(result.data(), &buffer_data[cursor], len);
+    cursor += len;
+#else
+    // 非 Emscripten 环境：从 mmap 批量复制
+    std::memcpy(result.data(), &mmap[cursor], len);
+    cursor += len;
+#endif
 
     return result;
 }

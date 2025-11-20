@@ -30,6 +30,8 @@ namespace wz
 
         [[nodiscard]] [[maybe_unused]] std::vector<u8> get_raw_data();
 
+        [[nodiscard]] [[maybe_unused]] std::vector<u8> get_parsed_data();
+
         [[nodiscard]] [[maybe_unused]] wz::Node *get_uol();
 
     private:
