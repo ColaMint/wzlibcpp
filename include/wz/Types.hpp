@@ -39,12 +39,21 @@ namespace wz {
     };
 
     struct WzSound {
-        i32 length;
-        i32 frequency;
-        i32 size;
-        size_t offset;
+        i32 length;              // 播放时长（毫秒）
+        i32 size;                // 音频数据大小
+        size_t offset;           // 音频数据偏移
 
-        WzSound() : length(0), frequency(0), size(0), offset(0) {}
+        // WAVEFORMATEX 字段
+        u16 format_tag;          // 格式标签：1=PCM, 0x55=MP3
+        u16 channels;            // 声道数
+        i32 frequency;           // 采样率
+        i32 avg_bytes_per_sec;   // 平均字节率
+        u16 block_align;         // 块对齐
+        u16 bits_per_sample;     // 采样位数
+
+        WzSound() : length(0), size(0), offset(0),
+                    format_tag(0), channels(0), frequency(0),
+                    avg_bytes_per_sec(0), block_align(0), bits_per_sample(0) {}
     };
 
     struct WzVec2D {

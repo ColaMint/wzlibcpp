@@ -3,6 +3,7 @@
 #include "File.hpp"
 #include "Property.hpp"
 #include <cassert>
+#include <iostream>
 #include <memory>
 #include <ranges>
 
@@ -231,17 +232,55 @@ wz::WzCanvas wz::Node::parse_canvas_property() {
 
 wz::WzSound wz::Node::parse_sound_property() {
   WzSound sound;
-  // reader->ReadUInt8();
-  reader->skip(sizeof(u8));
-  sound.size = reader->read_compressed_int();
-  sound.length = reader->read_compressed_int();
-  reader->set_position(reader->get_position() + 51);
-  // sound.frequency = reader->read<i32>();
-  auto fmt_ext_len = reader->read_compressed_int();
-  reader->set_position(reader->get_position() + fmt_ext_len);
 
+  // 跳过 soundDX8Ver (1字节)
+  reader->skip(sizeof(u8));
+
+  // 读取音频基本信息
+  sound.size = reader->read_compressed_int();   // 数据长度
+  sound.length = reader->read_compressed_int(); // 播放时长（毫秒）
+
+  // 读取 soundDecl 类型
+  auto soundDecl = reader->read<u8>();
+
+  // 跳过 mediaType 结构 (50字节: 16+16+1+1+16)
+  reader->skip(50);
+
+  // 如果 soundDecl == 2，读取并解析 WAVEFORMATEX
+  if (soundDecl == 2) {
+    auto fmt_ext_len = reader->read_compressed_int();
+
+    if (fmt_ext_len > 0) {
+      // 读取格式扩展数据
+      std::vector<u8> fmt_data(fmt_ext_len);
+      for (i32 i = 0; i < fmt_ext_len; i++) {
+        fmt_data[i] = reader->read<u8>();
+      }
+
+      // 解析 WAVEFORMATEX 结构（至少需要 18 字节）
+      if (fmt_ext_len >= 18) {
+        size_t pos = 0;
+        sound.format_tag = *reinterpret_cast<u16 *>(&fmt_data[pos]);
+        pos += 2;
+        sound.channels = *reinterpret_cast<u16 *>(&fmt_data[pos]);
+        pos += 2;
+        sound.frequency = *reinterpret_cast<i32 *>(&fmt_data[pos]);
+        pos += 4;
+        sound.avg_bytes_per_sec = *reinterpret_cast<i32 *>(&fmt_data[pos]);
+        pos += 4;
+        sound.block_align = *reinterpret_cast<u16 *>(&fmt_data[pos]);
+        pos += 2;
+        sound.bits_per_sample = *reinterpret_cast<u16 *>(&fmt_data[pos]);
+        pos += 2;
+        // cbSize 在 pos + 2，但我们不需要它
+      }
+    }
+  }
+
+  // 记录音频数据的起始位置
   sound.offset = reader->get_position();
 
+  // 跳过音频数据
   reader->set_position(sound.offset + sound.size);
 
   return sound;
