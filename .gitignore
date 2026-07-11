@@ -10,3 +10,4 @@
 *.vcproj
 *.vcxproj
 *.vcxproj.*
+.vscode/

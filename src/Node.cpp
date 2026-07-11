@@ -322,9 +322,11 @@ wz::Node *wz::Node::find_from_path(const std::u16string &path) {
     } else {
       node = node->get_child(str);
       if (node != nullptr) {
-        // 处理UOL
         if (node->type == wz::Type::UOL) {
           node = dynamic_cast<wz::Property<wz::WzUOL> *>(node)->get_uol();
+          if (!node) {
+            return nullptr;
+          }
         }
         if (node->type == wz::Type::Image) {
           static std::unordered_map<wz::Node *, wz::Node *> cache;
