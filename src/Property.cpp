@@ -65,8 +65,13 @@ template <> std::vector<u8> wz::Property<wz::WzCanvas>::get_parsed_data() {
 
   const auto result = uncompress(pixel_stream.data(), &uncompressed_len,
                                  compressed_data.data(), compressed_data.size());
-  if (result != Z_OK)
-    throw std::runtime_error("failed to decompress WZ canvas data");
+  // Some WZ variants contain more decoded bytes than the declared canvas
+  // dimensions. Keep the declared surface and accept a completely filled
+  // output buffer, matching the format's original truncation behavior.
+  if (result != Z_OK &&
+      !(result == Z_BUF_ERROR && uncompressed_len == pixel_stream.size()))
+    throw std::runtime_error(std::string("failed to decompress WZ canvas data: ") +
+                             zError(result));
   pixel_stream.resize(uncompressed_len);
   return pixel_stream;
 }
