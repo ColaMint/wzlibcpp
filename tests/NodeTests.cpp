@@ -20,6 +20,8 @@ int main()
     assert(children[2] == duplicate);
     assert(children[0]->get_name() == u"z");
     assert(children[1]->get_name() == u"a");
+    assert(children[0]->get_path() == u"/z");
+    assert(children[1]->get_path() == u"/a");
     assert(root.get_child(u"z") == first);
     assert(root.children_count() == 3);
 

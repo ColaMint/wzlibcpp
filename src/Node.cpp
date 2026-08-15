@@ -326,6 +326,8 @@ wz::Type wz::Node::get_type() const { return type; }
 
 const wz::wzstring &wz::Node::get_name() const noexcept { return name; }
 
+const wz::wzstring &wz::Node::get_path() const noexcept { return path; }
+
 wz::Reader *wz::Node::get_reader() const noexcept { return reader; }
 
 bool wz::Node::is_property() const {
