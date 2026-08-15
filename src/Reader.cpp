@@ -2,6 +2,8 @@
 #include <vector>
 #include <codecvt>
 #include <cstring>
+#include <stdexcept>
+#include <system_error>
 #include "Reader.hpp"
 #include "Keys.hpp"
 
@@ -9,25 +11,27 @@
 #include "Emscripten.hpp"
 
 wz::Reader::Reader(wz::MutableKey &new_key, const char *file_path)
-    : cursor(0), key(new_key), url(file_path)
+    : url(file_path), key(new_key), cursor(0)
 {
 }
 
-wz::Reader::Reader(wz::MutableKey &new_key, unsigned char *data, size_t size)
-    : cursor(0), key(new_key), buffer_data(data), buffer_size(size)
+wz::Reader::Reader(wz::MutableKey &new_key, const unsigned char *data, size_t size)
+    : buffer_data(data, data + size), key(new_key), cursor(0)
 {
 }
 
 mio::mmap_source::size_type wz::Reader::size() const
 {
-    return 0;
+    return buffer_data.size();
 }
 #else
 wz::Reader::Reader(wz::MutableKey &new_key, const char *file_path)
-    : cursor(0), key(new_key)
+    : key(new_key), cursor(0)
 {
     std::error_code error_code;
     mmap = mio::make_mmap_source<decltype(file_path)>(file_path, error_code);
+    if (error_code)
+        throw std::system_error(error_code, file_path);
 }
 
 mio::mmap_source::size_type wz::Reader::size() const
@@ -43,11 +47,12 @@ u8 wz::Reader::read_byte()
 
 [[maybe_unused]] std::vector<u8> wz::Reader::read_bytes(const size_t &len)
 {
+    ensure_available(len);
     std::vector<u8> result(len);
 
 #ifdef __EMSCRIPTEN__
     // Emscripten 环境：从 buffer_data 批量复制
-    std::memcpy(result.data(), &buffer_data[cursor], len);
+    std::memcpy(result.data(), buffer_data.data() + cursor, len);
     cursor += len;
 #else
     // 非 Emscripten 环境：从 mmap 批量复制
@@ -77,7 +82,7 @@ wz::wzstring wz::Reader::read_string(const size_t &len)
 {
     wz::wzstring result{};
 
-    for (int i = 0; i < len; ++i)
+    for (size_t i = 0; i < len; ++i)
     {
         result.push_back(read_byte());
     }
@@ -87,6 +92,8 @@ wz::wzstring wz::Reader::read_string(const size_t &len)
 
 void wz::Reader::set_position(const size_t &size)
 {
+    if (size > this->size())
+        throw std::out_of_range("reader position is outside the input");
     cursor = size;
 }
 
@@ -97,6 +104,7 @@ size_t wz::Reader::get_position() const
 
 void wz::Reader::skip(const size_t &size)
 {
+    ensure_available(size);
     cursor += size;
 }
 
@@ -133,15 +141,19 @@ wz::wzstring wz::Reader::read_wz_string()
         {
             return {};
         }
+        if (static_cast<size_t>(len) > (size() - cursor) / sizeof(u16))
+            throw std::out_of_range("WZ string exceeds the remaining input");
 
         wz::wzstring result{};
 
         for (int i = 0; i < len; ++i)
         {
-            auto encryptedChar = read<u16>();
-            encryptedChar ^= mask;
-            encryptedChar ^= *reinterpret_cast<u16 *>(&key[2 * i]);
-            result.push_back(encryptedChar);
+            auto encrypted_char = read<u16>();
+            encrypted_char ^= mask;
+            const auto key_word = static_cast<u16>(key[2 * i]) |
+                                  (static_cast<u16>(key[2 * i + 1]) << 8u);
+            encrypted_char ^= key_word;
+            result.push_back(encrypted_char);
             mask++;
         }
 
@@ -163,15 +175,17 @@ wz::wzstring wz::Reader::read_wz_string()
     {
         return {};
     }
+    if (static_cast<size_t>(len) > size() - cursor)
+        throw std::out_of_range("WZ string exceeds the remaining input");
 
     wz::wzstring result{};
 
     for (int n = 0; n < len; ++n)
     {
-        u8 encryptedChar = read_byte();
-        encryptedChar ^= mask;
-        encryptedChar ^= key[n];
-        result.push_back(static_cast<u16>(encryptedChar));
+        u8 encrypted_char = read_byte();
+        encrypted_char ^= mask;
+        encrypted_char ^= key[n];
+        result.push_back(static_cast<u16>(encrypted_char));
         mask++;
     }
 
@@ -203,7 +217,7 @@ wz::wzstring wz::Reader::read_string_block(const size_t &offset)
         return read_wz_string_from_offset(offset + read<u32>());
     default:
     {
-        assert(0);
+        throw std::runtime_error("invalid WZ string block type");
     }
     }
     return {};
@@ -213,12 +227,21 @@ wz::wzstring wz::Reader::read_wz_string_from_offset(const size_t &offset)
 {
     auto prev = get_position();
     set_position(offset);
-    auto result = read_wz_string();
-    set_position(prev);
-    return result;
+    try
+    {
+        auto result = read_wz_string();
+        set_position(prev);
+        return result;
+    }
+    catch (...)
+    {
+        set_position(prev);
+        throw;
+    }
 }
 
-void wz::Reader::set_key(wz::MutableKey &new_key)
+void wz::Reader::ensure_available(size_t length) const
 {
-    key = new_key;
+    if (cursor > size() || length > size() - cursor)
+        throw std::out_of_range("unexpected end of WZ data");
 }

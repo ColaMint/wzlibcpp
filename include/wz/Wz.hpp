@@ -65,7 +65,7 @@ namespace wz
         i16 version;
     };
 
-    u32 get_version_hash(i32 encryptedVersion, i32 realVersion);
+    u32 get_version_hash(i32 encrypted_version, i32 real_version);
 
     [[deprecated]]
     void initAES(const u8 *iv);

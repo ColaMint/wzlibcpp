@@ -3,9 +3,7 @@
 
 void wz::Emscripten::fetch_file_success(emscripten_fetch_t *fetch)
 {
-    file_size = fetch->numBytes;
-    file_data = (unsigned char *)malloc(file_size);
-    memcpy(file_data, fetch->data, fetch->numBytes);
+    file_data.assign(fetch->data, fetch->data + fetch->numBytes);
     emscripten_fetch_close(fetch); // 关闭 fetch 对象，释放资源
     fetch_done = true;             // 请求完成
 }
@@ -13,6 +11,7 @@ void wz::Emscripten::fetch_file_success(emscripten_fetch_t *fetch)
 // 请求失败时的回调函数
 void wz::Emscripten::fetch_file_failure(emscripten_fetch_t *fetch)
 {
+    file_data.clear();
     emscripten_fetch_close(fetch); // 关闭 fetch 对象，释放资源
     fetch_done = true;             // 请求完成
 }

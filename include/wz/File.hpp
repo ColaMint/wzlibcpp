@@ -4,6 +4,8 @@
 #include "Reader.hpp"
 #include "Wz.hpp"
 #include "Keys.hpp"
+#include <array>
+#include <memory>
 
 namespace wz
 {
@@ -13,7 +15,7 @@ namespace wz
     public:
         [[maybe_unused]] explicit File(const std::initializer_list<u8> &new_iv, const char *path);
 
-        [[maybe_unused]] explicit File(u8 *new_iv, const char *path);
+        [[maybe_unused]] explicit File(const u8 *new_iv, const char *path);
 
         ~File();
 
@@ -22,17 +24,12 @@ namespace wz
         [[maybe_unused]] [[nodiscard]] Node *get_root() const;
         Node &get_child(const wzstring &name);
 
-        MutableKey key;
-
     private:
-        // u8* key;
-        u8 *iv;
-
-        Node *root;
-
+        MutableKey key;
+        std::array<u8, 4> iv{};
         Description desc{};
-
         Reader reader;
+        std::unique_ptr<Node> root;
 
         bool parse_directories(Node *node);
 

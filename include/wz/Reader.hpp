@@ -1,6 +1,9 @@
 #pragma once
 
 #include <mio/mmap.hpp>
+#include <cstring>
+#include <stdexcept>
+#include <type_traits>
 #include "NumTypes.hpp"
 #include "Keys.hpp"
 #ifdef __EMSCRIPTEN__
@@ -17,21 +20,27 @@ namespace wz
         explicit Reader(wz::MutableKey &new_key, const char *file_path);
 
 #ifdef __EMSCRIPTEN__
-        explicit Reader(wz::MutableKey &new_key, unsigned char *data, size_t size);
+        explicit Reader(wz::MutableKey &new_key, const unsigned char *data, size_t size);
 
         template <typename T>
         [[nodiscard]] T read()
         {
-            T result = *reinterpret_cast<T *>(&buffer_data[cursor]);
-            cursor += sizeof(decltype(result));
+            static_assert(std::is_trivially_copyable_v<T>);
+            ensure_available(sizeof(T));
+            T result;
+            std::memcpy(&result, buffer_data.data() + cursor, sizeof(T));
+            cursor += sizeof(T);
             return result;
         }
 #else
         template <typename T>
         [[nodiscard]] T read()
         {
-            T result = *reinterpret_cast<T *>(&mmap[cursor]);
-            cursor += sizeof(decltype(result));
+            static_assert(std::is_trivially_copyable_v<T>);
+            ensure_available(sizeof(T));
+            T result;
+            std::memcpy(&result, mmap.data() + cursor, sizeof(T));
+            cursor += sizeof(T);
             return result;
         }
 #endif
@@ -62,10 +71,18 @@ namespace wz
         {
             auto prev = cursor;
             set_position(offset);
-            auto result = read<T>();
-            out = read_wz_string();
-            set_position(prev);
-            return result;
+            try
+            {
+                auto result = read<T>();
+                out = read_wz_string();
+                set_position(prev);
+                return result;
+            }
+            catch (...)
+            {
+                set_position(prev);
+                throw;
+            }
         }
 
         wzstring read_wz_string_from_offset(const size_t &offset);
@@ -78,22 +95,22 @@ namespace wz
 
         [[nodiscard]] bool is_wz_image();
 
-        void set_key(MutableKey &new_key);
-
+    private:
 #ifdef __EMSCRIPTEN__
         std::string url;
-        unsigned char *buffer_data;
-        size_t buffer_size;
+        std::vector<u8> buffer_data;
 #endif
-    public:
         MutableKey &key;
 
         size_t cursor = 0;
 
         mio::mmap_source mmap;
 
+        void ensure_available(size_t length) const;
+
         explicit Reader() = delete;
 
         friend class Node;
+        friend class File;
     };
 }

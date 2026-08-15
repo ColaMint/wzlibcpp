@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
+#include <memory>
 
 #include "Wz.hpp"
 #include "Reader.hpp"
@@ -25,25 +26,38 @@ namespace wz
 
         virtual ~Node();
 
+        Node(const Node &) = delete;
+        Node &operator=(const Node &) = delete;
+        Node(Node &&) = delete;
+        Node &operator=(Node &&) = delete;
+
         Node &operator[](const wzstring &name);
 
-        virtual void appendChild(const wzstring &name, Node *node);
+        void append_child(const wzstring &name, Node *node);
+
+        void append_child(const wzstring &name, std::unique_ptr<Node> node);
 
         Node *get_child(const wzstring &name);
 
         Node *get_child(const std::string &name);
 
-        [[maybe_unused]] [[nodiscard]] virtual const WzMap &get_children() const;
+        [[nodiscard]] const WzList &get_children() const noexcept;
 
-        [[maybe_unused]] [[nodiscard]] virtual Node *get_parent() const;
+        [[nodiscard]] Node *get_parent() const noexcept;
 
-        [[nodiscard]] [[maybe_unused]] size_t children_count() const;
+        [[nodiscard]] size_t children_count() const noexcept;
 
-        [[maybe_unused]] WzMap::iterator begin();
+        WzList::iterator begin() noexcept;
 
-        [[maybe_unused]] WzMap::iterator end();
+        WzList::iterator end() noexcept;
+
+        WzList::const_iterator begin() const noexcept;
+
+        WzList::const_iterator end() const noexcept;
 
         [[maybe_unused]] [[nodiscard]] Type get_type() const;
+
+        [[nodiscard]] const wzstring &get_name() const noexcept;
 
         [[nodiscard]] bool is_property() const;
 
@@ -51,15 +65,21 @@ namespace wz
 
         Node *find_from_path(const std::string &path);
 
-    public:
+    protected:
+        [[nodiscard]] Reader *get_reader() const noexcept;
+        [[nodiscard]] wz::MutableKey &get_key() const;
+
+    private:
         Type type;
 
         Node *parent;
-        WzMap children;
+        WzList children;
+        WzMap children_by_name;
 
         File *file;
         Reader *reader = nullptr;
 
+        wzstring name;
         std::u16string path = u"";
 
         bool parse_property_list(Node *target, size_t offset);
@@ -67,10 +87,9 @@ namespace wz
         WzCanvas parse_canvas_property();
         WzSound parse_sound_property();
 
-        [[nodiscard]] u8 *get_iv() const;
-        [[nodiscard]] wz::MutableKey &get_key() const;
-
+        [[nodiscard]] const u8 *get_iv() const;
         friend class Directory;
+        friend class File;
     };
 
 }

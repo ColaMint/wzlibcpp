@@ -17,6 +17,13 @@ file(GLOB AES_SOURCE_FILES AES/AES.cpp)
 add_library(wzlib ${SOURCE_FILES} ${AES_SOURCE_FILES})
 target_link_libraries(wzlib zlibstatic)
 
+include(CTest)
+if(BUILD_TESTING)
+        add_executable(wzlib_node_tests tests/NodeTests.cpp)
+        target_link_libraries(wzlib_node_tests PRIVATE wzlib)
+        add_test(NAME wzlib_node_tests COMMAND wzlib_node_tests)
+endif()
+
 if(WIN32)
         project(wzlibtest)
 

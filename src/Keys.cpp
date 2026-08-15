@@ -1,4 +1,7 @@
 #include "Keys.hpp"
+#include <algorithm>
+#include <limits>
+#include <stdexcept>
 
 wz::MutableKey::MutableKey(const std::array<u8, 4> &new_iv,
                            std::vector<u8> new_aes_key)
@@ -12,15 +15,20 @@ u8 &wz::MutableKey::operator[](size_t index) {
 }
 
 void wz::MutableKey::ensure_key_size(size_t size) {
-  size = static_cast<i32>(ceil(1.0 * size / batch_size) * batch_size);
+  if (size > std::numeric_limits<size_t>::max() - (batch_size - 1))
+    throw std::length_error("requested WZ key stream is too large");
+  size = ((size + batch_size - 1) / batch_size) * batch_size;
   decltype(keys) new_keys;
   new_keys.reserve(size);
-  if (*reinterpret_cast<i32 *>(iv.data()) == 0) {
-    keys = new_keys;
+  if (std::all_of(iv.begin(), iv.end(), [](u8 byte) { return byte == 0; })) {
+    new_keys.resize(size, 0);
+    keys = std::move(new_keys);
     return;
   }
+  if (aes_key.size() < 32)
+    throw std::logic_error("WZ AES key is not initialized");
 
-  auto start_index = 0;
+  size_t start_index = 0;
 
   if (!keys.empty()) {
     // std::copy(keys.begin(), keys.end(), new_keys.begin());
@@ -30,7 +38,7 @@ void wz::MutableKey::ensure_key_size(size_t size) {
 
   AES aes(256, 128);
 
-  for (int i = start_index; i < size; i += 16) {
+  for (size_t i = start_index; i < size; i += 16) {
     if (i == 0) {
       u8 block[16];
       for (int n = 0; n < 16; ++n) {
@@ -58,5 +66,5 @@ void wz::MutableKey::ensure_key_size(size_t size) {
     }
   }
 
-  keys = new_keys;
+  keys = std::move(new_keys);
 }

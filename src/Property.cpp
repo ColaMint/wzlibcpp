@@ -1,10 +1,30 @@
 #include "Property.hpp"
 #include "Types.hpp"
 #include <zlib.h>
+#include <unordered_set>
+#include <stdexcept>
+
+namespace
+{
+    class PositionGuard
+    {
+    public:
+        explicit PositionGuard(wz::Reader *reader)
+            : reader_(reader), position_(reader->get_position()) {}
+
+        ~PositionGuard() { reader_->set_position(position_); }
+
+    private:
+        wz::Reader *reader_;
+        size_t position_;
+    };
+}
 
 // get Canvas node raw data (原始压缩数据，不解密不解压)
 template <> std::vector<u8> wz::Property<wz::WzCanvas>::get_raw_data() {
   WzCanvas canvas = get();
+  auto *reader = get_reader();
+  PositionGuard guard(reader);
   reader->set_position(canvas.offset);
   return reader->read_bytes(canvas.size);
 }
@@ -12,41 +32,50 @@ template <> std::vector<u8> wz::Property<wz::WzCanvas>::get_raw_data() {
 // get Canvas node parsed data (解密并解压后的像素数据)
 template <> std::vector<u8> wz::Property<wz::WzCanvas>::get_parsed_data() {
   WzCanvas canvas = get();
+  auto *reader = get_reader();
+  PositionGuard guard(reader);
 
   std::vector<u8> compressed_data;
   reader->set_position(canvas.offset);
   size_t end_offset = reader->get_position() + canvas.size;
-  unsigned long uncompressed_len = canvas.uncompressed_size;
-  u8 *uncompressed = new u8[uncompressed_len];
+  if (canvas.uncompressed_size <= 0)
+    throw std::runtime_error("invalid WZ canvas output size");
+  uLongf uncompressed_len = static_cast<uLongf>(canvas.uncompressed_size);
+  std::vector<u8> pixel_stream(uncompressed_len);
 
   if (!canvas.is_encrypted) {
     // 未加密：直接读取压缩数据
     compressed_data = reader->read_bytes(canvas.size);
-    uncompress(uncompressed, (unsigned long *)&uncompressed_len,
-               compressed_data.data(), compressed_data.size());
   } else {
     // 已加密：边读取边解密
-    auto wz_key = get_key();
+    auto &wz_key = get_key();
 
     while (reader->get_position() < end_offset) {
+      if (end_offset - reader->get_position() < sizeof(i32))
+        throw std::runtime_error("truncated encrypted WZ canvas block");
       auto block_size = reader->read<i32>();
-      for (size_t i = 0; i < block_size; ++i) {
+      if (block_size < 0 || static_cast<size_t>(block_size) > end_offset - reader->get_position())
+        throw std::runtime_error("invalid encrypted WZ canvas block size");
+      for (i32 i = 0; i < block_size; ++i) {
         auto n = wz_key[i];
         compressed_data.push_back(static_cast<u8>(reader->read_byte() ^ n));
       }
     }
-    uncompress(uncompressed, (unsigned long *)&uncompressed_len,
-               compressed_data.data(), compressed_data.size());
   }
 
-  std::vector<u8> pixel_stream(uncompressed, uncompressed + uncompressed_len);
-  delete[] uncompressed;
+  const auto result = uncompress(pixel_stream.data(), &uncompressed_len,
+                                 compressed_data.data(), compressed_data.size());
+  if (result != Z_OK)
+    throw std::runtime_error("failed to decompress WZ canvas data");
+  pixel_stream.resize(uncompressed_len);
   return pixel_stream;
 }
 
 // get Sound node raw data (原始二进制数据，不做任何处理)
 template <> std::vector<u8> wz::Property<wz::WzSound>::get_raw_data() {
   WzSound sound = get();
+  auto *reader = get_reader();
+  PositionGuard guard(reader);
   reader->set_position(sound.offset);
   return reader->read_bytes(sound.size);
 }
@@ -97,31 +126,31 @@ template <> std::vector<u8> wz::Property<wz::WzSound>::get_parsed_data() {
     result.push_back((fmt_size >> 24) & 0xFF);
 
     // WAVEFORMATEX fields
-    // wFormatTag
+    // format_tag
     result.push_back(sound.format_tag & 0xFF);
     result.push_back((sound.format_tag >> 8) & 0xFF);
 
-    // nChannels
+    // channels
     result.push_back(sound.channels & 0xFF);
     result.push_back((sound.channels >> 8) & 0xFF);
 
-    // nSamplesPerSec
+    // samples_per_sec
     result.push_back(sound.frequency & 0xFF);
     result.push_back((sound.frequency >> 8) & 0xFF);
     result.push_back((sound.frequency >> 16) & 0xFF);
     result.push_back((sound.frequency >> 24) & 0xFF);
 
-    // nAvgBytesPerSec
+    // avg_bytes_per_sec
     result.push_back(sound.avg_bytes_per_sec & 0xFF);
     result.push_back((sound.avg_bytes_per_sec >> 8) & 0xFF);
     result.push_back((sound.avg_bytes_per_sec >> 16) & 0xFF);
     result.push_back((sound.avg_bytes_per_sec >> 24) & 0xFF);
 
-    // nBlockAlign
+    // block_align
     result.push_back(sound.block_align & 0xFF);
     result.push_back((sound.block_align >> 8) & 0xFF);
 
-    // wBitsPerSample
+    // bits_per_sample
     result.push_back(sound.bits_per_sample & 0xFF);
     result.push_back((sound.bits_per_sample >> 8) & 0xFF);
 
@@ -149,16 +178,23 @@ template <> std::vector<u8> wz::Property<wz::WzSound>::get_parsed_data() {
 
 // get uol By uol node
 template <> wz::Node *wz::Property<wz::WzUOL>::get_uol() {
+  static thread_local std::unordered_set<const Node *> resolving;
+  if (!resolving.insert(this).second)
+    return nullptr;
+  struct ResolutionGuard {
+    std::unordered_set<const Node *> &nodes;
+    const Node *node;
+    ~ResolutionGuard() { nodes.erase(node); }
+  } guard{resolving, this};
+
   auto path = get().uol;
+  auto *parent = get_parent();
+  if (parent == nullptr)
+    return nullptr;
   auto uol_node = parent->find_from_path(path);
 
   if (!uol_node) {
     return nullptr;
-  }
-
-  while (uol_node->type == wz::Type::UOL) {
-    path = dynamic_cast<wz::Property<wz::WzUOL> *>(uol_node)->get().uol;
-    uol_node = uol_node->parent->find_from_path(path);
   }
 
   return uol_node;
